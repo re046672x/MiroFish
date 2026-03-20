@@ -7,8 +7,8 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000"
-      - "5001:5001"
+      - "4000:4000"
+      - "5002:5002"
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads

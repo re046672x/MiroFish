@@ -28,6 +28,7 @@ from .zep_tools import (
     PanoramaResult,
     InterviewResult
 )
+from .web_search import WebSearchService
 
 logger = get_logger('mirofish.report_agent')
 
@@ -861,6 +862,12 @@ CHAT_OBSERVATION_SUFFIX = "\n\n请简洁回答问题。"
 # ═══════════════════════════════════════════════════════════════
 
 
+
+
+TOOL_DESC_WEB_SEARCH = """\
+Web search via DuckDuckGo (no API key). Search web pages or news for real-world background info.
+"""
+
 class ReportAgent:
     """
     Report Agent - 模拟报告生成Agent
@@ -950,6 +957,16 @@ class ReportAgent:
                     "max_agents": "最多采访的Agent数量（可选，默认5，最大10）"
                 }
             }
+        ,
+            "web_search": {
+                "name": "web_search",
+                "description": TOOL_DESC_WEB_SEARCH,
+                "parameters": {
+                    "query": "search query",
+                    "search_type": "web or news",
+                    "max_results": "max results (default 5)"
+                }
+            }
         }
     
     def _execute_tool(self, tool_name: str, parameters: Dict[str, Any], report_context: str = "") -> str:
@@ -1019,6 +1036,19 @@ class ReportAgent:
                 )
                 return result.to_text()
             
+            elif tool_name == "web_search":
+                query = parameters.get("query", "")
+                search_type = parameters.get("search_type", "web")
+                max_results = parameters.get("max_results", 5)
+                if isinstance(max_results, str):
+                    max_results = int(max_results)
+                ws = WebSearchService()
+                if search_type == "news":
+                    results = ws.search_news(query=query, max_results=max_results)
+                else:
+                    results = ws.search(query=query, max_results=max_results)
+                return ws.format_results(results, search_type)
+
             # ========== 向后兼容的旧工具（内部重定向到新工具） ==========
             
             elif tool_name == "search_graph":
@@ -1054,14 +1084,14 @@ class ReportAgent:
                 return json.dumps(result, ensure_ascii=False, indent=2)
             
             else:
-                return f"未知工具: {tool_name}。请使用以下工具之一: insight_forge, panorama_search, quick_search"
+                return f"未知工具: {tool_name}。请使用以下工具之一: insight_forge, panorama_search, quick_search, web_search"
                 
         except Exception as e:
             logger.error(f"工具执行失败: {tool_name}, 错误: {str(e)}")
             return f"工具执行失败: {str(e)}"
     
     # 合法的工具名称集合，用于裸 JSON 兜底解析时校验
-    VALID_TOOL_NAMES = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
+    VALID_TOOL_NAMES = {"insight_forge", "panorama_search", "quick_search", "interview_agents", "web_search"}
 
     def _parse_tool_calls(self, response: str) -> List[Dict[str, Any]]:
         """
@@ -1286,7 +1316,7 @@ class ReportAgent:
         min_tool_calls = 3  # 最少工具调用次数
         conflict_retries = 0  # 工具调用与Final Answer同时出现的连续冲突次数
         used_tools = set()  # 记录已调用过的工具名
-        all_tools = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
+        all_tools = {"insight_forge", "panorama_search", "quick_search", "interview_agents", "web_search"}
 
         # 报告上下文，用于InsightForge的子问题生成
         report_context = f"章节标题: {section.title}\n模拟需求: {self.simulation_requirement}"
